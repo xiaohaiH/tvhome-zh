@@ -15,7 +15,7 @@
         android:id="@+id/icon"
         android:layout_width="20dp"
         android:layout_height="20dp"
-        android:tint="@drawable/pill_text"
+        android:tint="@color/icon_tint"
         android:duplicateParentState="true"
         android:contentDescription="@null" />
 

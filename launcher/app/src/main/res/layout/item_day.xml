@@ -32,7 +32,7 @@
         android:layout_height="22dp"
         android:layout_marginEnd="10dp"
         android:duplicateParentState="true"
-        android:tint="@drawable/pill_text"
+        android:tint="@color/icon_tint"
         android:contentDescription="@null" />
 
     <TextView

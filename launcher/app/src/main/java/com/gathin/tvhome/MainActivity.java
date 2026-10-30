@@ -2,23 +2,20 @@ package com.gathin.tvhome;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
-import android.media.tv.TvContract;
-import android.media.tv.TvInputInfo;
-import android.media.tv.TvInputManager;
 import android.net.Uri;
 import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -155,18 +152,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private float density;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
-    private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
+    /** A dynamically registered receiver works on KitKat as well as current Android releases. */
+    private final BroadcastReceiver networkReceiver = new BroadcastReceiver() {
         @Override
-        public void onAvailable(@NonNull Network network) {
-            handler.post(MainActivity.this::updateWifiLabel);
-        }
-
-        @Override
-        public void onLost(@NonNull Network network) {
-            handler.post(MainActivity.this::updateWifiLabel);
+        public void onReceive(Context context, Intent intent) {
+            updateWifiLabel();
         }
     };
+    private boolean networkReceiverRegistered;
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
@@ -198,12 +191,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        StartupDiagnostics.mark("M01 进入 MainActivity.onCreate，准备调用系统 onCreate");
         super.onCreate(savedInstanceState);
+        StartupDiagnostics.mark("M02 准备加载桌面布局 activity_main");
         setContentView(R.layout.activity_main);
+        StartupDiagnostics.mark("M03 布局已加载，准备加载自定义字体");
         Typefaces.apply(findViewById(android.R.id.content));
         live = new WeakReference<>(this);
         density = getResources().getDisplayMetrics().density;
         // config.xml defaults, then a config.json overlay pushed by tools/theme.sh if one is there.
+        StartupDiagnostics.mark("M04 字体已应用，准备读取桌面配置");
         cfg = Config.load(this);
         // The user's own choice wins; otherwise fall back to what this screen can carry comfortably.
         int wanted = getSharedPreferences(PREFS_LAYOUT, MODE_PRIVATE).getInt(KEY_COLUMNS, 0);
@@ -214,6 +211,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         glass = findViewById(R.id.glass);
         // A theme may paint the whole background: a colour, a wallpaper, or nothing beyond both.
         root.setBackgroundColor(cfg.backgroundColor);
+        StartupDiagnostics.mark("M05 配置已读取，准备天气和背景初始化");
         weather = new Weather(this);
         setupWeather();
         if (cfg.wallpaper != null) showWallpaper(cfg.wallpaper);
@@ -232,6 +230,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         btnWifi = findViewById(R.id.btnWifi);
 
+        StartupDiagnostics.mark("M06 准备初始化应用网格和动画");
         grid = findViewById(R.id.grid);
         grid.setLayoutManager(new GridLayoutManager(this, COLUMNS) {
             /**
@@ -407,15 +406,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (!onTile) hideGlass();
         });
 
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        // The default-network callback is Android 7 (24). Older releases still get the label
-        // refreshed by the broadcasts below; only the live "ethernet/wifi" switch is missing.
-        if (cm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            cm.registerDefaultNetworkCallback(networkCallback);
-        }
-
         // If the user left the Bing wallpaper on, make sure today's picture is there before they see
         // the desk. Runs in the background and re-applies only when something actually changed.
+        StartupDiagnostics.mark("M07 网格和按钮已初始化，准备壁纸设置");
         wall = new Wallpaper(this);
         if (wall.autoDaily() && !wall.hasWallpaper()) {
             new Thread(() -> {
@@ -428,7 +421,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 // since the panel also floats over apps, not just over the desktop).
         openPanelFromQuickSettings(getIntent().getAction());
         // Whether this launcher answers the system's input-switcher request.
+        StartupDiagnostics.mark("M08 准备应用信号源入口设置");
         applyInputKeyHandling();
+        StartupDiagnostics.mark("M09 MainActivity.onCreate 已返回");
     }
 
     /** Opens one of the desk's own panels, whichever route asked for it (quick settings or a cold start). */
@@ -440,6 +435,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     protected void onResume() {
+        StartupDiagnostics.mark("M19 进入 MainActivity.onResume");
         super.onResume();
         // The tiles are rebuilt only when Home was really left behind (another app took the screen)
         // or when the system took them away for memory. A panel over the desk — quick settings, the
@@ -465,9 +461,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             applyWallpaper();
         }
         if (rebuild || adapter.isEmpty()) {
+            StartupDiagnostics.mark("M20 准备查询电视应用和加载应用图标");
             adapter.reload();
             grid.scheduleLayoutAnimation();
         }
+        StartupDiagnostics.mark("M21 应用列表已加载，准备刷新状态标签");
         if (weather != null && weather.enabled()) refreshWeather();
         updateLunar();
         updateWifiLabel();
@@ -482,6 +480,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             int pos = adapter.positionOf(returnKey);
             focusTile(pos >= 0 ? pos : returnSlot);
         });
+        StartupDiagnostics.mark("M30 onResume 已完成；尚未确认首帧绘制成功");
     }
 
     @Override
@@ -493,8 +492,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     protected void onStart() {
+        StartupDiagnostics.mark("M10 进入 onStart，准备注册网络广播");
         super.onStart();
         started = true;
+        IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(networkReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(networkReceiver, filter);
+        }
+        networkReceiverRegistered = true;
     }
 
     @Override
@@ -503,6 +511,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // only pauses us, so this really does mean the desk was left behind.
         awayFromDesk = true;
         started = false;
+        if (networkReceiverRegistered) {
+            unregisterReceiver(networkReceiver);
+            networkReceiverRegistered = false;
+        }
         super.onStop();
     }
 
@@ -536,8 +548,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onDestroy() {
         live = null;
         super.onDestroy();
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (cm != null) cm.unregisterNetworkCallback(networkCallback);
     }
 
     @Override
@@ -615,18 +625,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * <p>3. the vendor action with that URI, for sets whose player wants the action spelled out.
      */
     private void openInput(String inputId) {
-        // A CEC device (an Apple TV, a soundbar) has an input of its own whose parent is the port it
-        // sits on: switch the port, not the device.
-        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
-        if (tim != null) {
-            try {
-                TvInputInfo info = tim.getTvInputInfo(inputId);
-                if (info != null && info.getParentId() != null) inputId = info.getParentId();
-            } catch (Throwable ignored) {
-                // no such input: use the id as it is
-            }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            openSourcePanel();
+            return;
         }
-        Uri uri = TvContract.buildChannelUriForPassthroughInput(inputId);
+        // Keep TV Input Framework types outside the activity loaded by KitKat's Dalvik.
+        inputId = TvInputCatalog.parentId(this, inputId);
+        Uri uri = TvInputCatalog.channelUri(inputId);
         String action = cfg.inputAction == null ? "" : cfg.inputAction.trim();
 
         // 1. Xiaomi China's firmware: the standard URI is either refused or, worse, accepted and
@@ -915,7 +920,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         popup.setOutsideTouchable(true);
-        popup.setElevation(12 * density);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) popup.setElevation(12 * density);
 
         addTileMenuRow(rows, popup,
                 alreadyPinned ? R.string.dock_remove_from : R.string.dock_add_to,
@@ -1189,8 +1194,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     /**
-     * "Favourites" button: shows every installed app, with the pinned ones ticked, so the dock can be
-     * rebuilt from the sofa instead of by editing config.xml and recompiling.
+     * "Favourites" button: shows TV apps and explicitly added library apps, with pinned ones ticked,
+     * so the dock can be rebuilt from the sofa without changing the TV-only discovery policy.
      */
     private void showDockPicker() {
         if (dockPicker != null && dockPicker.isShowing()) {
@@ -1204,7 +1209,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         final List<DockApp> found = new ArrayList<>();
         PackageManager pm = getPackageManager();
-        Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
+        Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(AppAdapter.TV_LAUNCHER_CATEGORY);
         for (ResolveInfo ri : pm.queryIntentActivities(probe, 0)) {
             if (ri.activityInfo == null) continue;
             if (ri.activityInfo.packageName.equals(getPackageName())) continue;
@@ -1947,7 +1952,7 @@ private int recommendColumns() {
                 ViewGroup.LayoutParams.WRAP_CONTENT, true);
         weatherPanel.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         weatherPanel.setOutsideTouchable(true);
-        weatherPanel.setElevation(12 * density);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) weatherPanel.setElevation(12 * density);
         // The sheet opens from the top of the screen and reaches down to the bottom of it: the
         // page is tall, and the buttons at its bottom have to stay clear of the bottom edge as
         // well. What does not fit scrolls inside the sheet — nothing is folded away, because a
@@ -2084,7 +2089,7 @@ private int recommendColumns() {
                 height > 0 ? height : ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         popup.setOutsideTouchable(true);
-        popup.setElevation(12 * density);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) popup.setElevation(12 * density);
         popup.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
 
         Runnable search = () -> {
@@ -2402,15 +2407,14 @@ private int recommendColumns() {
         String text = getString(R.string.wifi);
         try {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            // getActiveNetwork is Android 6 (23); older releases fall back to the plain label.
-            Network net = cm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                    ? cm.getActiveNetwork() : null;
-            NetworkCapabilities caps = net != null ? cm.getNetworkCapabilities(net) : null;
-            if (caps == null) {
+            // NetworkInfo remains available on newer Android and also reports real connection
+            // state on KitKat/Lollipop, where getActiveNetwork() does not exist.
+            NetworkInfo network = cm != null ? cm.getActiveNetworkInfo() : null;
+            if (network == null || !network.isConnected()) {
                 text = getString(R.string.offline);
-            } else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+            } else if (network.getType() == ConnectivityManager.TYPE_ETHERNET) {
                 text = getString(R.string.ethernet);
-            } else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            } else if (network.getType() == ConnectivityManager.TYPE_WIFI) {
                 WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
                 WifiInfo info = wm != null ? wm.getConnectionInfo() : null;
                 String ssid = info != null ? info.getSSID() : null;
@@ -2470,92 +2474,21 @@ private int recommendColumns() {
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));   // needed for Back to dismiss
         popup.setOutsideTouchable(true);
         popup.setAnimationStyle(0);
-        popup.setElevation(0f);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) popup.setElevation(0f);
 
-        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
-        boolean sawNonHdmi = false;
         String tunerId = null;
-        if (tim != null) {
-            List<TvInputInfo> inputs = new ArrayList<>(tim.getTvInputList());
-            // Some sets (Xiaomi China firmware) need the vendor's own port numbers to switch.
-            vendorSourceNumbers = VendorInputs.isChinaFirmware(this)
-                    ? VendorInputs.sourceNumbers(inputs) : java.util.Collections.emptyMap();
-            // HDMI ports first in port order, then AV and the rest.
-            Collections.sort(inputs, (a, b) -> {
-                boolean ha = a.getType() == TvInputInfo.TYPE_HDMI, hb = b.getType() == TvInputInfo.TYPE_HDMI;
-                if (ha != hb) return ha ? -1 : 1;
-                return String.valueOf(a.loadLabel(this)).compareToIgnoreCase(String.valueOf(b.loadLabel(this)));
-            });
-            // Some TVs (Sony) report every HDMI port as connected whether or not anything is plugged in,
-            // so drop the HDMI status then. A TV with every port really in use loses it too.
-            int hdmiPorts = 0, hdmiConnected = 0;
-            for (TvInputInfo info : inputs) {
-                if (!info.isPassthroughInput() || info.getType() != TvInputInfo.TYPE_HDMI) continue;
-                hdmiPorts++;
-                if (tim.getInputState(info.getId()) == TvInputManager.INPUT_STATE_CONNECTED) hdmiConnected++;
-            }
-            boolean hdmiStateBogus = hdmiPorts > 1 && hdmiConnected == hdmiPorts;
-            // An HDMI-CEC device (an Apple TV, a soundbar) gets an input of its own whose parent is the
-            // port it sits on, so the port and the device would each get a row ("HDMI 1" and
-            // "HDMI Apple TV"). The device takes its port's row instead, and a bare port is listed
-            // only when nothing on it speaks CEC.
-            java.util.Set<String> inputIds = new java.util.HashSet<>();
-            for (TvInputInfo info : inputs) inputIds.add(info.getId());
-            java.util.Map<String, List<TvInputInfo>> cecDevices = new java.util.HashMap<>();
-            for (TvInputInfo info : inputs) {
-                String parent = info.getParentId();
-                if (parent == null || !inputIds.contains(parent)) continue;
-                if (!info.isPassthroughInput()) continue;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && info.isHidden(this)) continue;
-                List<TvInputInfo> onPort = cecDevices.get(parent);
-                if (onPort == null) cecDevices.put(parent, onPort = new ArrayList<>());
-                onPort.add(info);
-            }
-            for (TvInputInfo info : inputs) {
-                if (info.getType() == TvInputInfo.TYPE_TUNER
-                        && (info.getServiceInfo().applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0
-                        && (tunerId == null || info.getId().compareTo(tunerId) < 0)) {
-                    tunerId = info.getId();
-                }
-                // Inputs hidden in the TV's own Settings > Inputs stay out of the menu too.
-                if (!info.isPassthroughInput()) continue;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && info.isHidden(this)) continue;
-                // A CEC device's row is added with its port, below.
-                if (info.getParentId() != null && inputIds.contains(info.getParentId())) continue;
-                CharSequence l = info.loadLabel(this);
-                String label = l == null ? info.getId() : l.toString();
-                boolean hdmi = info.getType() == TvInputInfo.TYPE_HDMI;
-                if (hdmi && !label.toUpperCase().contains("HDMI")) label = "HDMI " + label;
-                // The name given to the port in Settings > Inputs ("MacBook Pro") goes before the port.
-                CharSequence custom = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-                        ? info.loadCustomLabel(this) : null;
-                if (custom != null && custom.length() > 0 && !custom.toString().equals(label)) {
-                    label = custom + " \u00B7 " + label;
-                }
-                final String id = info.getId();
-                // Analog AV jacks have no hotplug detection, and some TVs report them as always
-                // connected, so AV rows show no state.
-                int state = !hdmi || hdmiStateBogus ? -1 : tim.getInputState(id);
-                if (!hdmi && rows.getChildCount() > 0 && !sawNonHdmi) addSeparator(rows);
-                if (!hdmi) sawNonHdmi = true;
-                List<TvInputInfo> devices = cecDevices.get(id);
-                if (devices != null) {
-                    for (TvInputInfo device : devices) {
-                        CharSequence name = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-                                ? device.loadCustomLabel(this) : null;
-                        String deviceLabel = name == null || name.length() == 0
-                                ? label : name + " \u00B7 " + label;
-                        final String deviceId = device.getId();
-                        int deviceState = !hdmi || hdmiStateBogus ? -1 : tim.getInputState(deviceId);
-                        addInputRow(rows, popup, R.drawable.ic_input, deviceLabel, deviceState,
-                                () -> openInput(deviceId));
-                    }
-                    continue;
-                }
-                addInputRow(rows, popup, hdmi ? R.drawable.ic_input : R.drawable.ic_av, label, state,
-                        () -> openInput(id));
+        vendorSourceNumbers = java.util.Collections.emptyMap();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            TvInputCatalog catalog = TvInputCatalog.load(this);
+            vendorSourceNumbers = catalog.vendorNumbers;
+            tunerId = catalog.tunerId;
+            for (TvInputCatalog.Item item : catalog.items) {
+                if (item.separator) addSeparator(rows);
+                addInputRow(rows, popup, item.icon, item.label, item.state, () -> openInput(item.id));
             }
         }
+        // KitKat has no TV Input Framework. Continue through the vendor/provider and native
+        // source-panel fallbacks below instead of trying to load android.media.tv classes.
         // Coocaa OS (Skyworth / 酷开) registers no inputs with TvInputManager, so the framework
         // lists none and the menu would come up empty. The vendor's own app knows its sources.
         if (rows.getChildCount() == 0 && CoocaaSources.present(this)) {
@@ -2570,14 +2503,20 @@ private int recommendColumns() {
                 });
             }
         }
-        Intent liveTv = liveTvPkg.isEmpty() ? null : getPackageManager().getLeanbackLaunchIntentForPackage(liveTvPkg);
+        Intent liveTv = null;
+        if (!liveTvPkg.isEmpty()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                liveTv = getPackageManager().getLeanbackLaunchIntentForPackage(liveTvPkg);
+            }
+            if (liveTv == null) liveTv = getPackageManager().getLaunchIntentForPackage(liveTvPkg);
+        }
         // Xiaomi China firmware: the analogue TV is opened by the vendor's player, with its own action.
         if (liveTv == null && tunerId != null && VendorInputs.isChinaFirmware(this)) {
             liveTv = VendorInputs.firstResolvable(this, VendorInputs.analogueTvIntents());
         }
-        if (liveTv != null && tunerId != null) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && liveTv != null && tunerId != null) {
             liveTv = new Intent(Intent.ACTION_VIEW)
-                    .setDataAndType(TvContract.buildChannelUriForPassthroughInput(tunerId), "vnd.android.cursor.item/channel")
+                    .setDataAndType(TvInputCatalog.channelUri(tunerId), "vnd.android.cursor.item/channel")
                     .setPackage(liveTvPkg);
         }
         // A vendor panel configured in config.xml, with no Live TV row to sit beside it: the panel is
@@ -2630,7 +2569,7 @@ private int recommendColumns() {
         int room = root.getHeight() - (at[1] + anchor.getHeight()) - (int) (34 * density);
         int height = Math.min(panel.getMeasuredHeight(), Math.max(room, (int) (120 * density)));
         PopupWindow popup = new PopupWindow(panel, width, height, true);
-        popup.setElevation(12 * density);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) popup.setElevation(12 * density);
         // The same two lines the Inputs menu sets: a transparent drawable (which draws nothing) is
         // what a popup needs to take touches at all on firmware that is fussy about it, and outside
         // touches then close the panel, one more way out besides Back. On a TV the remote is what
@@ -2696,10 +2635,10 @@ private int recommendColumns() {
         View dot = row.findViewById(R.id.dot);
         // This TV reports "standby" for every port whether or not something is plugged in, so only
         // definite states are shown.
-        if (state == TvInputManager.INPUT_STATE_CONNECTED) {
+        if (state == TvInputCatalog.CONNECTED) {
             status.setText(R.string.connected);
             dot.setVisibility(View.VISIBLE);
-        } else if (state == TvInputManager.INPUT_STATE_DISCONNECTED) {
+        } else if (state == TvInputCatalog.DISCONNECTED) {
             status.setText(R.string.not_connected);
             dot.setVisibility(View.GONE);
         } else {

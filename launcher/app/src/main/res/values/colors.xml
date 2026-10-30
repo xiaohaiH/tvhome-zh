@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pre-21 ImageView reads tint as one integer, not a ColorStateList.
+         A neutral grey stays visible against both dark rows and their light focus state. -->
+    <color name="icon_tint">#FF777777</color>
+</resources>

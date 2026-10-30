@@ -1,5 +1,6 @@
 package com.gathin.tvhome;
 
+import android.annotation.SuppressLint;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -8,14 +9,13 @@ import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Outline;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewOutlineProvider;
 import android.view.animation.OvershootInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -38,6 +38,11 @@ import java.util.Set;
  * the rest is alphabetical.
  */
 public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
+
+    // This is an inlined intent string, not a framework API call. KitKat can query it too.
+    // Keep the TV-only default on every OS; ordinary apps are an explicit library opt-in.
+    @SuppressLint("InlinedApi")
+    static final String TV_LAUNCHER_CATEGORY = Intent.CATEGORY_LEANBACK_LAUNCHER;
 
     interface TileListener {
         void onTileFocused(int position, View card);
@@ -388,7 +393,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
     void reload() {
         PackageManager pm = ctx.getPackageManager();
-        Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
+        Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(TV_LAUNCHER_CATEGORY);
         List<ResolveInfo> found = pm.queryIntentActivities(probe, 0);
         List<Entry> fresh = new ArrayList<>();
         // The packages that answer to a TV entry point. An app the user put on the desk by hand
@@ -405,8 +410,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             tvPackages.add(pkg);
             if (pkg.equals(ctx.getPackageName()) || hidden.contains(pkg)) continue;
             if (hiddenAtRuntime.isHidden(pkg)) continue;
-            Drawable banner = ri.activityInfo.loadBanner(pm);
-            if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
+            Drawable banner = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                banner = ri.activityInfo.loadBanner(pm);
+                if (banner == null) banner = ri.activityInfo.applicationInfo.loadBanner(pm);
+            }
             // A square "banner" counts as none: cropped over a 16:9 tile it is a blur, so the tile shows
             // the app's icon and name instead.
             if (banner != null && !isBannerShaped(banner.getIntrinsicWidth(), banner.getIntrinsicHeight())) {
@@ -537,7 +545,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
     private void launch(Entry e) {
         Intent i = new Intent(Intent.ACTION_MAIN)
-                .addCategory(e.tv ? Intent.CATEGORY_LEANBACK_LAUNCHER : Intent.CATEGORY_LAUNCHER)
+                .addCategory(e.tv ? TV_LAUNCHER_CATEGORY : Intent.CATEGORY_LAUNCHER)
                 .setComponent(e.component)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
         try {
@@ -642,14 +650,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             name = v.findViewById(R.id.name);
 
             final float density = v.getResources().getDisplayMetrics().density;
-            card.setOutlineProvider(new ViewOutlineProvider() {
-                @Override
-                public void getOutline(View view, Outline outline) {
-                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
-                            cornerRadius(view.getWidth(), density));
-                }
-            });
-            card.setClipToOutline(true);
+            // RoundedCardLayout clips its background and children on KitKat too; no
+            // ViewOutlineProvider class is loaded by the API 19 ViewHolder.
 
             // A remote's long press is a stream of repeated key events, not a touch, so the
             // long-click listener never hears of it: the first press opened the app and there was

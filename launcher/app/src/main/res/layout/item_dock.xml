@@ -43,7 +43,7 @@
         android:layout_width="18dp"
         android:layout_height="18dp"
         android:src="@drawable/ic_tick"
-        android:tint="@drawable/pill_text"
+        android:tint="@color/icon_tint"
         android:duplicateParentState="true"
         android:contentDescription="@null" />
 </LinearLayout>

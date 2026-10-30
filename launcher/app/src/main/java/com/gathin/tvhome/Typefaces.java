@@ -12,7 +12,7 @@ import android.widget.TextView;
  * <p>res/font only works from Android 8 (API 26) on: the {@code android:fontFamily} attribute
  * crashes the inflater on anything older, because the framework of those releases reads it as a
  * family name and a font resource is not one. Loading from assets and applying it by hand works on
- * every release the launcher supports, which is what lets minSdk stay at 21.
+ * every release the launcher supports, including KitKat (API 19).
  *
  * <p>The weight the layout asked for is kept where the platform can do it: the XML still carries
  * {@code android:fontVariationSettings}, which older releases simply never look at. On 8 and up the

@@ -64,6 +64,11 @@
                      open it from anywhere but the Home button. -->
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- KitKat vendor launchers normally query LAUNCHER, not LEANBACK_LAUNCHER. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
         </activity>
 
         <!-- Quick settings, opened by the remote's Settings (选项) button through HomeKeyService.

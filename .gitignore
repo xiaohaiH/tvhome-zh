@@ -1,7 +1,14 @@
 # Gradle / Android build output
+.history/
 .gradle/
 build/
 local.properties
+
+# Python compatibility checks
+__pycache__/
+
+# Isolated feature worktrees
+.worktrees/
 
 # IDE
 .idea/

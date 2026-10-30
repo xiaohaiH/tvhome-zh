@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.media.tv.TvInputInfo;
 
+import androidx.annotation.RequiresApi;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -68,6 +70,7 @@ final class VendorInputs {
      * the framework's own hardware ids rather than from the labels, because the labels are whatever
      * the vendor felt like calling the ports on that model.
      */
+    @RequiresApi(21)
     static Map<String, Integer> sourceNumbers(List<TvInputInfo> inputs) {
         Map<String, Integer> out = new HashMap<>();
         if (inputs == null || inputs.isEmpty()) return out;
@@ -150,6 +153,7 @@ final class VendorInputs {
      * Whether an input is the composite (AV) one. A tuner is not: on these sets the tuner is the
      * analogue TV, which the player reaches by its own action rather than by a port number.
      */
+    @RequiresApi(21)
     private static boolean isComposite(TvInputInfo info) {
         if (info.getType() == TvInputInfo.TYPE_COMPOSITE) return true;
         if (info.getType() == TvInputInfo.TYPE_TUNER) return false;

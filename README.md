@@ -137,11 +137,22 @@ Dock 就是底部那一排常用应用。两个入口，随你喜欢：
 
 ## 设备兼容性
 
+### Android 4.4 / YunOS 旧系统兼容版
+
+Android 4.4（API 19）设备请使用单独提供的 **[`tvhome-zh-kitkat.apk`](tvhome-zh-kitkat.apk)**
+（`1.6.1-kitkat.2`），不是下面安装示例中的旧 `tvhome-zh-debug.apk`。
+已适配旧版接口、主题和图标，保留 v1 签名及“默认只显示电视应用、普通应用手动添加”的原有逻辑；
+本地检查通过，但**已收到 YunOS 真机在桌面出现前闪退的反馈，尚未定位修复**。
+无法取得日志时可使用独立的 **[启动诊断包](docs/startup-diagnostics.md)**，通过电视上的诊断页拍照反馈。
+U 盘安装步骤、签名/覆盖安装限制及测试清单见 **[KitKat 兼容说明](docs/kitkat-compatibility.md)**。
+试装期间请保留原厂桌面。
+
 ### Android 11 的包可见性（本项目能解决）
 
 很多国产 TV 应用在 Android 11 上会出现「应用列表只显示几个 App」的问题——这是
 **Android 11 包可见性**（package visibility）限制：应用必须声明 `<queries>` 才能看到其他应用。
-本项目 `targetSdk 29`，在 Android 11 上属于「旧版行为」，能正常枚举全部应用，无需额外声明。
+当前源码 `targetSdk 34`，已通过 Manifest 的 `<queries>` 声明普通/电视应用启动入口及所需厂商包，
+以枚举可启动应用；不是依赖旧 `targetSdk` 绕过可见性限制。
 
 这在国产盒子（普遍停留在 Android 11）上尤其重要。
 

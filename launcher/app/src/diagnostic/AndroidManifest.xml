@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Repeat the base TV declarations for lint's source-manifest checks. -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <application
+        android:name=".StartupDiagnostics"
+        android:banner="@drawable/banner"
+        android:label="TVHome 启动诊断"
+        tools:replace="android:label">
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:process=":desktop"
+            android:taskAffinity="${applicationId}.desktop"
+            tools:replace="android:exported">
+            <!-- Diagnostic builds must not compete for HOME or bypass the report screen. -->
+            <intent-filter tools:node="removeAll" />
+        </activity>
+        <activity
+            android:name=".DiagnosticsActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.Holo.NoActionBar.Fullscreen">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service android:name=".HomeKeyService" android:enabled="false" />
+        <service android:name=".ClockDream" android:enabled="false" />
+    </application>
+</manifest>

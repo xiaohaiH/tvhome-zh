@@ -157,7 +157,7 @@ final class AppLibraryPanel {
                     info.put(pkg, ri);
                 }
             }
-            for (ResolveInfo ri : query(pm, Intent.CATEGORY_LEANBACK_LAUNCHER)) {
+            for (ResolveInfo ri : query(pm, AppAdapter.TV_LAUNCHER_CATEGORY)) {
                 if (ri.activityInfo == null) continue;
                 String pkg = ri.activityInfo.packageName;
                 if (pkg.equals(activity.getPackageName())) continue;

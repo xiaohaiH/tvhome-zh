@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.TvHome" parent="android:Theme.Material.NoActionBar.Fullscreen">
+    <!-- KitKat has no platform Material theme. API 21+ overrides only this style. -->
+    <style name="Theme.TvHome" parent="android:Theme.Holo.NoActionBar.Fullscreen">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:colorBackground">@android:color/black</item>
         <item name="android:windowAnimationStyle">@null</item>
@@ -21,7 +22,9 @@
         <item name="android:clickable">true</item>
     </style>
 
-    <style name="TopButton">
+    <style name="TopButton" parent="TopButtonBase" />
+
+    <style name="TopButtonBase">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">42dp</item>
         <!-- Tight: six buttons now share the top bar with the date, and at 8dp the first one
@@ -36,7 +39,6 @@
         <!-- Inert below Android 8 (26): the TextView of those releases never reads
              fontVariationSettings, so the weight simply stays at the file's default. -->
         <item name="android:fontVariationSettings" tools:ignore="NewApi">\'wght\' 500</item>
-        <item name="android:letterSpacing">0.01</item>
         <item name="android:drawablePadding">9dp</item>
         <!-- Inert below Android 6 (23): the icon keeps its own colour there, which for a
              white glyph on a glass pill is the same thing. -->
